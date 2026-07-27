@@ -12,12 +12,14 @@ export default {
       },
       colors: {
         ink: {
-          900: '#0F172A',
+          900: '#09090b',
           800: '#111c33',
           700: '#1E293B',
         },
         neon: '#22C55E',
         danger: '#EF4444',
+        zk: '#6366F1',
+        web3: '#06B6D4',
       },
       boxShadow: {
         'glow-green': '0 0 40px -8px rgba(34,197,94,0.5)',
@@ -33,6 +35,8 @@ export default {
         'float': 'float 7s ease-in-out infinite',
         'spin-slow': 'spin 1.4s linear infinite',
         'ticker': 'ticker 18s linear infinite',
+        'slide-in-right': 'slideInRight 0.5s cubic-bezier(0.16,1,0.3,1) forwards',
+        'zk-shimmer': 'zkShimmer 2s ease-in-out infinite',
       },
       keyframes: {
         fadeIn: { '0%': { opacity: '0' }, '100%': { opacity: '1' } },
@@ -56,6 +60,14 @@ export default {
         ticker: {
           '0%': { transform: 'translateX(0)' },
           '100%': { transform: 'translateX(-50%)' },
+        },
+        slideInRight: {
+          '0%': { opacity: '0', transform: 'translateX(40px)' },
+          '100%': { opacity: '1', transform: 'translateX(0)' },
+        },
+        zkShimmer: {
+          '0%,100%': { opacity: '0.6' },
+          '50%': { opacity: '1' },
         },
       },
     },

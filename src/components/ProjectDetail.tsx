@@ -14,7 +14,6 @@ import {
   BadgeCheck,
   X,
   Bot,
-  ScanLine,
   Lock,
   CheckCircle2,
   Loader2,

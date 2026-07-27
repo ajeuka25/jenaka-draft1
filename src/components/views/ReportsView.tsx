@@ -14,6 +14,9 @@ import {
   Link2,
   ExternalLink,
   Clock,
+  Fingerprint,
+  ShieldCheck,
+  Lock,
 } from 'lucide-react';
 import {
   initialReports,
@@ -24,6 +27,7 @@ import {
 } from '@/data/reports';
 import { formatDate, formatNumber } from '@/data/projects';
 import { Modal } from '@/components/ui/Modal';
+import { useToast } from '@/context/ToastContext';
 
 const CATEGORIES: ReportCategory[] = ['MBG', 'Infrastruktur', 'Sosial', 'Pengadaan', 'Lainnya'];
 
@@ -39,6 +43,9 @@ export function ReportsView() {
   const [showForm, setShowForm] = useState(false);
   const [activeReport, setActiveReport] = useState<CitizenReport | null>(null);
   const [submitting, setSubmitting] = useState(false);
+  const [useZk, setUseZk] = useState(false);
+  const [zkProofing, setZkProofing] = useState(false);
+  const { push } = useToast();
   const [form, setForm] = useState({
     nama: '',
     anonim: false,
@@ -63,34 +70,43 @@ export function ReportsView() {
   const submit = (e: React.FormEvent) => {
     e.preventDefault();
     if (!form.judul.trim() || !form.detail.trim() || !form.lokasi.trim()) return;
-    setSubmitting(true);
-    setTimeout(() => {
-      const newReport: CitizenReport = {
-        id: `RPT-${String(reports.length + 1).padStart(3, '0')}`,
-        nama: form.anonim ? 'Warga Anonim' : form.nama.trim() || 'Warga',
-        anonim: form.anonim,
-        kategori: form.kategori,
-        lokasi: form.lokasi.trim(),
-        judul: form.judul.trim(),
-        detail: form.detail.trim(),
-        tanggal: new Date().toISOString().slice(0, 10),
-        status: 'Masuk',
-        bukti: 0,
-        upvote: 0,
-        evidence: [],
-      };
-      setReports((rs) => [newReport, ...rs]);
-      setForm({
-        nama: '',
-        anonim: false,
-        kategori: 'MBG',
-        lokasi: '',
-        judul: '',
-        detail: '',
-      });
-      setSubmitting(false);
-      setShowForm(false);
-    }, 1200);
+    if (useZk) {
+      setZkProofing(true);
+      setTimeout(() => {
+        setZkProofing(false);
+        finalizeSubmit(true);
+        push('web3', 'ZK-Proof Generated', 'Laporan terkirim anonim via Zero-Knowledge Proof. Identitas terlindungi.');
+      }, 2500);
+    } else {
+      setSubmitting(true);
+      setTimeout(() => {
+        finalizeSubmit(false);
+      }, 1200);
+    }
+  };
+
+  const finalizeSubmit = (zk: boolean) => {
+    const newReport: CitizenReport = {
+      id: `RPT-${String(reports.length + 1).padStart(3, '0')}`,
+      nama: zk || form.anonim ? 'ZK-Anonymous' : form.nama.trim() || 'Warga',
+      anonim: zk || form.anonim,
+      kategori: form.kategori,
+      lokasi: form.lokasi.trim(),
+      judul: form.judul.trim(),
+      detail: form.detail.trim(),
+      tanggal: new Date().toISOString().slice(0, 10),
+      status: 'Masuk',
+      bukti: 0,
+      upvote: 0,
+      evidence: [],
+      zkVerified: zk,
+    };
+    setReports((rs) => [newReport, ...rs]);
+    setForm({ nama: '', anonim: false, kategori: 'MBG', lokasi: '', judul: '', detail: '' });
+    setSubmitting(false);
+    setShowForm(false);
+    setUseZk(false);
+    if (!zk) push('info', 'Laporan Terkirim', 'Laporan warga berhasil masuk ke antrian verifikasi.');
   };
 
   const totalUpvotes = reports.reduce((s, r) => s + r.upvote, 0);
@@ -119,8 +135,26 @@ export function ReportsView() {
       {showForm && (
         <form
           onSubmit={submit}
-          className="mb-8 rounded-2xl glass p-5 animate-fade-in-up"
+          className="relative mb-8 overflow-hidden rounded-2xl glass p-5 animate-fade-in-up"
         >
+          {zkProofing && (
+            <div className="absolute inset-0 z-20 flex flex-col items-center justify-center bg-ink-900/90 backdrop-blur">
+              <Fingerprint size={48} className="mb-4 text-zk animate-zk-shimmer" />
+              <p className="font-display text-lg font-semibold text-white">
+                Generating ZK-Proof…
+              </p>
+              <p className="mt-1 text-sm text-slate-400">ZK-Location &amp; Student-Parent Credential Proof</p>
+              <div className="mt-4 flex gap-1.5">
+                {[0, 1, 2].map((i) => (
+                  <span
+                    key={i}
+                    className="h-2 w-2 rounded-full bg-zk"
+                    style={{ animation: `zk-shimmer 1s ease-in-out ${i * 0.2}s infinite` }}
+                  />
+                ))}
+              </div>
+            </div>
+          )}
           <div className="grid gap-4 sm:grid-cols-2">
             <Field label="Nama (opsional)">
               <input
@@ -184,17 +218,41 @@ export function ReportsView() {
               <ShieldQuestion size={15} className="text-slate-400" />
               Laporkan secara anonim
             </label>
+
+            {/* ZK-Proof toggle */}
+            <button
+              type="button"
+              onClick={() => setUseZk((v) => !v)}
+              className={`flex items-center gap-2 rounded-lg px-3 py-2 text-xs font-semibold ring-1 transition ${
+                useZk
+                  ? 'bg-zk/20 text-zk ring-zk/40'
+                  : 'bg-white/5 text-slate-400 ring-white/10 hover:text-white'
+              }`}
+            >
+              <Fingerprint size={15} />
+              Kirim Anonim via ZK-Proof
+              {useZk && <CheckCircle2 size={13} />}
+            </button>
+
             <button
               type="submit"
-              disabled={submitting}
+              disabled={submitting || zkProofing}
               className="flex items-center gap-2 rounded-xl bg-gradient-to-r from-neon to-emerald-500 px-5 py-2.5 text-sm font-semibold text-ink-900 shadow-glow-green transition hover:shadow-[0_0_30px_-4px_rgba(34,197,94,0.7)] disabled:opacity-60"
             >
-              {submitting ? (
+              {submitting || zkProofing ? (
                 <Loader2 size={16} className="animate-spin-slow" />
+              ) : useZk ? (
+                <Lock size={16} />
               ) : (
                 <Send size={16} />
               )}
-              {submitting ? 'Mengirim…' : 'Kirim Laporan'}
+              {zkProofing
+                ? 'Generating ZK-Proof…'
+                : submitting
+                  ? 'Mengirim…'
+                  : useZk
+                    ? 'Kirim via ZK-Proof'
+                    : 'Kirim Laporan'}
             </button>
           </div>
         </form>
@@ -235,6 +293,11 @@ export function ReportsView() {
                 >
                   {r.status}
                 </span>
+                {r.zkVerified && (
+                  <span className="flex items-center gap-1 rounded-md bg-zk/15 px-2 py-0.5 text-[10px] font-bold text-zk ring-1 ring-zk/30">
+                    <ShieldCheck size={10} /> ZK-Proof Verified
+                  </span>
+                )}
               </div>
               <span className="font-mono text-[10px] text-slate-500">{r.id}</span>
             </div>

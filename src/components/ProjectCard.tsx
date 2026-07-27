@@ -12,7 +12,6 @@ import {
   type Project,
   getRiskLevel,
   RISK_META,
-  formatRupiah,
   formatDate,
   getEstimatedLoss,
   getMarkup,

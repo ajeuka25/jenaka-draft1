@@ -17,6 +17,8 @@ export interface Project {
   skorRisiko: number;
   rincianBarang: RincianBarang[];
   deskripsiAnomaliAI: string;
+  koordinat: { lat: number; lng: number };
+  laporanWarga: number;
 }
 
 export const projects: Project[] = [
@@ -46,6 +48,8 @@ export const projects: Project[] = [
     ],
     deskripsiAnomaliAI:
       'Terindikasi ketidaksesuaian serius antara LPJ dan realisasi. LPJ mencantumkan menu daging dan susu senilai Rp15.000/porsi, namun hasil pelaksanaan hanya berupa tahu tempe dengan estimasi nilai Rp5.000/porsi. Vendor juga baru berdiri selama 3 hari sehingga berisiko tinggi.',
+    koordinat: { lat: -6.1234, lng: 107.5678 },
+    laporanWarga: 47,
   },
   {
     id: 'PRJ-002',
@@ -69,6 +73,8 @@ export const projects: Project[] = [
     ],
     deskripsiAnomaliAI:
       'Terindikasi mark-up harga material. Harga Semen Gresik dalam LPJ mencapai Rp160.000 per sak, jauh di atas harga acuan pasar daerah sebesar Rp65.000 per sak sehingga memerlukan audit lanjutan.',
+    koordinat: { lat: -7.2345, lng: 108.9012 },
+    laporanWarga: 23,
   },
   {
     id: 'PRJ-003',
@@ -87,6 +93,8 @@ export const projects: Project[] = [
     ],
     deskripsiAnomaliAI:
       'Tidak ditemukan indikasi penyimpangan yang signifikan. Harga barang masih berada dalam rentang harga pasar dan profil vendor dinilai wajar.',
+    koordinat: { lat: -6.9876, lng: 106.5432 },
+    laporanWarga: 2,
   },
 ];
 

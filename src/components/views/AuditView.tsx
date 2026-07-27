@@ -1,7 +1,6 @@
 import { useEffect, useState } from 'react';
 import {
   Cpu,
-  FileSearch,
   CheckCircle2,
   AlertTriangle,
   Loader2,

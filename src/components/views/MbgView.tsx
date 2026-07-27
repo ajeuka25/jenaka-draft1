@@ -14,10 +14,24 @@ import {
   ImageUp,
   ScanFace,
   ShieldCheck,
-  ArrowRight,
+  Lock,
+  FileJson,
+  ShieldCheck as ShieldCheckIcon,
+  Database,
+  Link2,
 } from 'lucide-react';
 import { useWallet } from '@/context/WalletContext';
+import { useToast } from '@/context/ToastContext';
 import { formatRupiah } from '@/data/projects';
+import {
+  generateIpfsCid,
+  generateTxHash,
+  buildIpfsMetadata,
+  simulateTx,
+  type TxDetails,
+  type IpfsMetadata,
+} from '@/lib/web3';
+import { TxModal } from '@/components/ui/TxModal';
 
 type Phase = 'idle' | 'analyzing' | 'done';
 
@@ -34,12 +48,18 @@ const ANALYSIS_STEPS = [
 
 export function MbgView() {
   const { state, rewards, award } = useWallet();
+  const { push } = useToast();
   const fileRef = useRef<HTMLInputElement>(null);
   const [phase, setPhase] = useState<Phase>('idle');
   const [image, setImage] = useState<string | null>(null);
   const [stepIdx, setStepIdx] = useState(0);
   const [rewarded, setRewarded] = useState(false);
-  const [toast, setToast] = useState<string | null>(null);
+  const [locking, setLocking] = useState(false);
+  const [locked, setLocked] = useState(false);
+  const [tx, setTx] = useState<TxDetails | null>(null);
+  const [metadata, setMetadata] = useState<IpfsMetadata | null>(null);
+  const [cid, setCid] = useState<string | null>(null);
+  const [showTx, setShowTx] = useState(false);
 
   const handleFile = (file?: File | null) => {
     if (!file) return;
@@ -48,7 +68,7 @@ export function MbgView() {
     runAnalysis();
   };
 
-  const useSample = () => {
+  const loadSample = () => {
     setImage(SAMPLE_IMAGE);
     runAnalysis();
   };
@@ -56,6 +76,10 @@ export function MbgView() {
   const runAnalysis = () => {
     setPhase('analyzing');
     setRewarded(false);
+    setLocked(false);
+    setCid(null);
+    setTx(null);
+    setMetadata(null);
     setStepIdx(0);
     const totalSteps = ANALYSIS_STEPS.length;
     const interval = setInterval(() => {
@@ -75,14 +99,45 @@ export function MbgView() {
     if (rewarded) return;
     award(10);
     setRewarded(true);
-    setToast('+10 Token Testnet dikirim ke dompet warga atas laporan valid!');
-    setTimeout(() => setToast(null), 4000);
+    push('success', '+10 Token Testnet', 'Reward dikirim ke dompet warga atas laporan valid!');
+  };
+
+  const lockOnChain = () => {
+    if (locked || locking) return;
+    setLocking(true);
+    setTimeout(() => {
+      const newCid = generateIpfsCid();
+      const newMeta = buildIpfsMetadata(
+        'PRJ-001',
+        'MBG',
+        98,
+        generateTxHash(),
+        'SDN 01 Sukamaju (-6.1234, 107.5678)',
+        deviationPct,
+        realValue,
+        lpjValue,
+      );
+      const newTx = simulateTx(
+        newCid,
+        state.connected ? state.address : '0xzk-anon-reporter',
+      );
+      setCid(newCid);
+      setMetadata(newMeta);
+      setTx(newTx);
+      setLocked(true);
+      setLocking(false);
+      push('web3', 'Evidence Anchored On-Chain', `CID ${newCid.slice(0, 16)}… tercatam di KawalDana Testnet.`);
+    }, 2200);
   };
 
   const reset = () => {
     setPhase('idle');
     setImage(null);
     setRewarded(false);
+    setLocked(false);
+    setCid(null);
+    setTx(null);
+    setMetadata(null);
     setStepIdx(0);
   };
 
@@ -135,7 +190,7 @@ export function MbgView() {
                 <button
                   onClick={(e) => {
                     e.stopPropagation();
-                    useSample();
+                    loadSample();
                   }}
                   className="flex items-center gap-2 rounded-lg bg-white/5 px-4 py-2 text-xs font-semibold text-white ring-1 ring-white/10 transition hover:bg-white/10"
                 >
@@ -338,6 +393,59 @@ export function MbgView() {
                   Hubungkan wallet Anda terlebih dahulu untuk menerima reward token.
                 </p>
               )}
+
+              {/* Cryptographic Proof & Metadata Check panel */}
+              <div className="rounded-xl border border-zk/20 bg-zk/5 p-4">
+                <p className="mb-3 flex items-center gap-2 text-sm font-semibold text-white">
+                  <ShieldCheck size={16} className="text-zk" /> Cryptographic Proof &amp; Metadata Check
+                </p>
+                <div className="space-y-2">
+                  <ProofRow icon={MapPin} label="Geotag Status" value="Verified via ZK-Location" accent="text-neon" />
+                  <ProofRow icon={ShieldCheckIcon} label="C2PA Photo Integrity" value="Authenticated — No AI manipulation" accent="text-neon" />
+                  <ProofRow icon={Database} label="Market Price Oracle" value="Cross-referenced via zkTLS Oracle" accent="text-web3" />
+                </div>
+              </div>
+
+              {/* Lock Evidence On-Chain */}
+              <button
+                onClick={lockOnChain}
+                disabled={locked || locking}
+                className="group relative flex w-full items-center justify-center gap-2.5 overflow-hidden rounded-xl bg-gradient-to-r from-zk to-indigo-500 px-4 py-3.5 text-sm font-bold text-white shadow-[0_0_20px_-6px_rgba(99,102,241,0.6)] transition hover:shadow-[0_0_30px_-4px_rgba(99,102,241,0.8)] disabled:opacity-70"
+              >
+                {locking ? (
+                  <>
+                    <Loader2 size={18} className="animate-spin-slow" /> Anchoring to IPFS &amp; Testnet…
+                  </>
+                ) : locked ? (
+                  <>
+                    <CheckCircle2 size={18} /> Evidence Locked On-Chain
+                  </>
+                ) : (
+                  <>
+                    <Lock size={18} /> Lock Evidence On-Chain
+                  </>
+                )}
+              </button>
+
+              {/* On-chain result */}
+              {locked && tx && (
+                <div className="animate-fade-in-up space-y-2.5 rounded-xl border border-zk/30 bg-zk/5 p-4">
+                  <div className="flex items-center gap-2">
+                    <FileJson size={15} className="text-zk" />
+                    <span className="text-xs font-semibold text-white">IPFS CID Generated</span>
+                  </div>
+                  <div className="flex items-center justify-between rounded-lg bg-ink-900/60 px-3 py-2">
+                    <span className="truncate font-mono text-[11px] text-zk">bafybeic…{cid?.slice(-12)}</span>
+                    <span className="shrink-0 rounded-md bg-zk/20 px-2 py-0.5 text-[10px] font-bold text-zk">CIDv1</span>
+                  </div>
+                  <button
+                    onClick={() => setShowTx(true)}
+                    className="flex w-full items-center justify-center gap-2 rounded-lg bg-web3/10 px-4 py-2.5 text-sm font-semibold text-web3 ring-1 ring-web3/30 transition hover:bg-web3/20"
+                  >
+                    <Link2 size={15} /> View Transaction Details
+                  </button>
+                </div>
+              )}
             </div>
           )}
         </div>
@@ -368,20 +476,32 @@ export function MbgView() {
         })}
       </div>
 
-      {/* Toast */}
-      {toast && (
-        <div className="fixed bottom-6 left-1/2 z-[60] -translate-x-1/2 animate-fade-in-up">
-          <div className="flex items-center gap-3 rounded-xl bg-ink-700 px-5 py-3.5 shadow-2xl ring-1 ring-neon/40">
-            <Coins size={22} className="text-neon" />
-            <div>
-              <p className="text-sm font-semibold text-white">{toast}</p>
-              <p className="flex items-center gap-1 text-xs text-slate-400">
-                <ArrowRight size={11} /> Saldo reward: {rewards} TKW
-              </p>
-            </div>
-          </div>
-        </div>
-      )}
+      <TxModal
+        open={showTx}
+        onClose={() => setShowTx(false)}
+        tx={tx}
+        metadata={metadata}
+      />
+    </div>
+  );
+}
+
+function ProofRow({
+  icon: Icon,
+  label,
+  value,
+  accent,
+}: {
+  icon: typeof MapPin;
+  label: string;
+  value: string;
+  accent: string;
+}) {
+  return (
+    <div className="flex items-center gap-2.5 rounded-lg bg-white/5 px-3 py-2">
+      <Icon size={14} className={`shrink-0 ${accent}`} />
+      <span className="text-xs text-slate-400">{label}</span>
+      <span className={`ml-auto text-right text-xs font-semibold ${accent}`}>{value}</span>
     </div>
   );
 }

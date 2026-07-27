@@ -31,6 +31,7 @@ export interface CitizenReport {
   bukti: number;
   upvote: number;
   evidence: EvidenceItem[];
+  zkVerified?: boolean;
 }
 
 const FOOD_IMAGE =
