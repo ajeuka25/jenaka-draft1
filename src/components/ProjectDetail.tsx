@@ -35,6 +35,13 @@ import {
 } from '@/data/projects';
 import { Modal } from '@/components/ui/Modal';
 import { RiskGauge } from '@/components/ui/RiskGauge';
+import {
+  BLOCK_EXPLORER,
+  IS_ONCHAIN_CONFIGURED,
+  buildIpfsMetadata,
+  lockEvidenceOnChain,
+} from '@/lib/web3';
+import { pinMetadataToIpfs } from '@/lib/ipfs';
 
 type AuditPhase = 'idle' | 'scanning' | 'done';
 
@@ -75,16 +82,49 @@ export function ProjectDetail({ project, onClose }: ProjectDetailProps) {
     setTimeout(() => setPhase('done'), 2000);
   };
 
-  const lockOnChain = () => {
-    setLocking(true);
+  const lockOnChain = async () => {
+  setLocking(true);
+  setLockError(null);
+
+  if (!IS_ONCHAIN_CONFIGURED) {
     setTimeout(() => {
       setLocking(false);
       setLocked(true);
       setTxHash(generateTxHash());
-      setToast('Evidence berhasil dikunci on-chain (Testnet)');
+      setToast('Evidence dikunci (mode simulasi — deploy contract untuk transaksi nyata)');
       setTimeout(() => setToast(null), 3500);
     }, 1600);
-  };
+    return;
+  }
+
+  try {
+    const worstItem = [...project.rincianBarang].sort(
+      (a, b) => getMarkup(b).pct - getMarkup(a).pct,
+    )[0];
+    const metadata = buildIpfsMetadata(
+      project.id,
+      project.kategori,
+      Math.round(100 - project.skorRisiko),
+      generateTxHash().slice(0, 34), // placeholder photoHash — ganti dengan hash foto asli jika sudah ada upload
+      `${project.koordinat.lat}, ${project.koordinat.lng}`,
+      worstItem ? getMarkup(worstItem).pct : 0,
+      worstItem?.hargaPasar ?? 0,
+      worstItem?.hargaLPJ ?? 0,
+    );
+
+    const cid = await pinMetadataToIpfs(metadata);
+    const tx = await lockEvidenceOnChain(project.id, cid);
+
+    setLocked(true);
+    setTxHash(tx.txHash);
+    setToast('Evidence berhasil dikunci on-chain (Testnet)');
+    setTimeout(() => setToast(null), 3500);
+  } catch (err) {
+    setLockError(err instanceof Error ? err.message : 'Transaksi gagal atau dibatalkan.');
+  } finally {
+    setLocking(false);
+  }
+};
 
   return (
     <Modal

@@ -19,7 +19,6 @@ import {
   Lock,
 } from 'lucide-react';
 import {
-  initialReports,
   type CitizenReport,
   type ReportCategory,
   type ReportStatus,
@@ -28,6 +27,8 @@ import {
 import { formatDate, formatNumber } from '@/data/projects';
 import { Modal } from '@/components/ui/Modal';
 import { useToast } from '@/context/ToastContext';
+import { useQuery } from '@/hooks/useQuery';
+import { fetchReports, insertReport, upvoteReport } from '@/lib/db';
 
 const CATEGORIES: ReportCategory[] = ['MBG', 'Infrastruktur', 'Sosial', 'Pengadaan', 'Lainnya'];
 
@@ -38,7 +39,7 @@ const STATUS_STYLE: Record<ReportStatus, string> = {
 };
 
 export function ReportsView() {
-  const [reports, setReports] = useState<CitizenReport[]>(initialReports);
+  const { data: reports, loading, error, refetch } = useQuery(fetchReports);
   const [filter, setFilter] = useState<ReportCategory | 'all'>('all');
   const [showForm, setShowForm] = useState(false);
   const [activeReport, setActiveReport] = useState<CitizenReport | null>(null);
@@ -55,16 +56,23 @@ export function ReportsView() {
     detail: '',
   });
 
+  const reportsList = reports ?? [];
+
   const filtered = useMemo(
     () =>
-      filter === 'all' ? reports : reports.filter((r) => r.kategori === filter),
-    [reports, filter],
+      filter === 'all' ? reportsList : reportsList.filter((r) => r.kategori === filter),
+    [reportsList, filter],
   );
 
-  const upvote = (id: string) => {
-    setReports((rs) =>
-      rs.map((r) => (r.id === id ? { ...r, upvote: r.upvote + 1 } : r)),
-    );
+  const upvote = async (id: string) => {
+    const r = reportsList.find((x) => x.id === id);
+    if (!r) return;
+    try {
+      await upvoteReport(id, r.upvote);
+      refetch();
+    } catch {
+      push('warning', 'Gagal', 'Tidak bisa upvote laporan saat ini.');
+    }
   };
 
   const submit = (e: React.FormEvent) => {
@@ -85,31 +93,31 @@ export function ReportsView() {
     }
   };
 
-  const finalizeSubmit = (zk: boolean) => {
-    const newReport: CitizenReport = {
-      id: `RPT-${String(reports.length + 1).padStart(3, '0')}`,
-      nama: zk || form.anonim ? 'ZK-Anonymous' : form.nama.trim() || 'Warga',
-      anonim: zk || form.anonim,
-      kategori: form.kategori,
-      lokasi: form.lokasi.trim(),
-      judul: form.judul.trim(),
-      detail: form.detail.trim(),
-      tanggal: new Date().toISOString().slice(0, 10),
-      status: 'Masuk',
-      bukti: 0,
-      upvote: 0,
-      evidence: [],
-      zkVerified: zk,
-    };
-    setReports((rs) => [newReport, ...rs]);
-    setForm({ nama: '', anonim: false, kategori: 'MBG', lokasi: '', judul: '', detail: '' });
-    setSubmitting(false);
-    setShowForm(false);
-    setUseZk(false);
-    if (!zk) push('info', 'Laporan Terkirim', 'Laporan warga berhasil masuk ke antrian verifikasi.');
+  const finalizeSubmit = async (zk: boolean) => {
+    try {
+      await insertReport({
+        nama: zk || form.anonim ? (zk ? 'ZK-Anonymous' : 'Warga Anonim') : form.nama.trim() || 'Warga',
+        anonim: zk || form.anonim,
+        kategori: form.kategori,
+        lokasi: form.lokasi.trim(),
+        judul: form.judul.trim(),
+        detail: form.detail.trim(),
+        zkVerified: zk,
+      });
+      setForm({ nama: '', anonim: false, kategori: 'MBG', lokasi: '', judul: '', detail: '' });
+      setSubmitting(false);
+      setShowForm(false);
+      setUseZk(false);
+      refetch();
+      if (!zk) push('info', 'Laporan Terkirim', 'Laporan warga berhasil masuk ke antrian verifikasi.');
+    } catch (err) {
+      setSubmitting(false);
+      setZkProofing(false);
+      push('warning', 'Gagal Mengirim', err instanceof Error ? err.message : 'Terjadi kesalahan.');
+    }
   };
 
-  const totalUpvotes = reports.reduce((s, r) => s + r.upvote, 0);
+  const totalUpvotes = reportsList.reduce((s, r) => s + r.upvote, 0);
 
   return (
     <div className="mx-auto max-w-7xl px-4 py-10 sm:px-6 lg:px-8">
@@ -119,8 +127,11 @@ export function ReportsView() {
             Laporan MBG &amp; Warga
           </h2>
           <p className="text-sm text-slate-400">
-            Suara warga yang memvalidasi temuan AI. {reports.length} laporan •{' '}
-            {formatNumber(totalUpvotes)} dukungan.
+            {loading
+              ? 'Memuat laporan dari database…'
+              : error
+                ? `Error: ${error}`
+                : `${reportsList.length} laporan • ${formatNumber(totalUpvotes)} dukungan.`}
           </p>
         </div>
         <button
