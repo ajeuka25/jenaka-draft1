@@ -389,15 +389,13 @@ export function ProjectDetail({ project, onClose }: ProjectDetailProps) {
                       </span>
                     </p>
                   </div>
-                  <button
-                    href={`${BLOCK_EXPLORER}${txHash}`}
+  href={`${BLOCK_EXPLORER}${txHash}`}
   target="_blank"
   rel="noopener noreferrer"
   className="ml-auto flex shrink-0 items-center gap-1 text-xs font-medium text-neon transition hover:gap-2"
 >
   <ExternalLink size={13} /> Explorer
 </a>
-                  </button>
                 </div>
                 <button
                   onClick={onClose}
