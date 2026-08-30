@@ -56,6 +56,7 @@ export function ProjectDetail({ project, onClose }: ProjectDetailProps) {
   const [locking, setLocking] = useState(false);
   const [txHash, setTxHash] = useState<string | null>(null);
   const [toast, setToast] = useState<string | null>(null);
+  const [lockError, setLockError] = useState<string | null>(null);
 
   useEffect(() => {
     if (project) {
@@ -64,6 +65,7 @@ export function ProjectDetail({ project, onClose }: ProjectDetailProps) {
       setLocking(false);
       setTxHash(null);
       setToast(null);
+      setLockError(null);
     }
   }, [project]);
 
@@ -83,48 +85,48 @@ export function ProjectDetail({ project, onClose }: ProjectDetailProps) {
   };
 
   const lockOnChain = async () => {
-  setLocking(true);
-  setLockError(null);
+    setLocking(true);
+    setLockError(null);
 
-  if (!IS_ONCHAIN_CONFIGURED) {
-    setTimeout(() => {
-      setLocking(false);
+    if (!IS_ONCHAIN_CONFIGURED) {
+      setTimeout(() => {
+        setLocking(false);
+        setLocked(true);
+        setTxHash(generateTxHash());
+        setToast('Evidence dikunci (mode simulasi — deploy contract untuk transaksi nyata)');
+        setTimeout(() => setToast(null), 3500);
+      }, 1600);
+      return;
+    }
+
+    try {
+      const worstItem = [...project.rincianBarang].sort(
+        (a, b) => getMarkup(b).pct - getMarkup(a).pct,
+      )[0];
+      const metadata = buildIpfsMetadata(
+        project.id,
+        project.kategori,
+        Math.round(100 - project.skorRisiko),
+        generateTxHash().slice(0, 34),
+        `${project.koordinat.lat}, ${project.koordinat.lng}`,
+        worstItem ? getMarkup(worstItem).pct : 0,
+        worstItem?.hargaPasar ?? 0,
+        worstItem?.hargaLPJ ?? 0,
+      );
+
+      const cid = await pinMetadataToIpfs(metadata);
+      const tx = await lockEvidenceOnChain(project.id, cid);
+
       setLocked(true);
-      setTxHash(generateTxHash());
-      setToast('Evidence dikunci (mode simulasi — deploy contract untuk transaksi nyata)');
+      setTxHash(tx.txHash);
+      setToast('Evidence berhasil dikunci on-chain (Testnet)');
       setTimeout(() => setToast(null), 3500);
-    }, 1600);
-    return;
-  }
-
-  try {
-    const worstItem = [...project.rincianBarang].sort(
-      (a, b) => getMarkup(b).pct - getMarkup(a).pct,
-    )[0];
-    const metadata = buildIpfsMetadata(
-      project.id,
-      project.kategori,
-      Math.round(100 - project.skorRisiko),
-      generateTxHash().slice(0, 34), // placeholder photoHash — ganti dengan hash foto asli jika sudah ada upload
-      `${project.koordinat.lat}, ${project.koordinat.lng}`,
-      worstItem ? getMarkup(worstItem).pct : 0,
-      worstItem?.hargaPasar ?? 0,
-      worstItem?.hargaLPJ ?? 0,
-    );
-
-    const cid = await pinMetadataToIpfs(metadata);
-    const tx = await lockEvidenceOnChain(project.id, cid);
-
-    setLocked(true);
-    setTxHash(tx.txHash);
-    setToast('Evidence berhasil dikunci on-chain (Testnet)');
-    setTimeout(() => setToast(null), 3500);
-  } catch (err) {
-    setLockError(err instanceof Error ? err.message : 'Transaksi gagal atau dibatalkan.');
-  } finally {
-    setLocking(false);
-  }
-};
+    } catch (err) {
+      setLockError(err instanceof Error ? err.message : 'Transaksi gagal atau dibatalkan.');
+    } finally {
+      setLocking(false);
+    }
+  };
 
   return (
     <Modal
