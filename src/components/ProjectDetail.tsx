@@ -389,7 +389,7 @@ export function ProjectDetail({ project, onClose }: ProjectDetailProps) {
                       </span>
                     </p>
                   </div>
-  <a> href={`${BLOCK_EXPLORER}${txHash}`}
+  <a href={`${BLOCK_EXPLORER}${txHash}`}
   target="_blank"
   rel="noopener noreferrer"
   className="ml-auto flex shrink-0 items-center gap-1 text-xs font-medium text-neon transition hover:gap-2"
