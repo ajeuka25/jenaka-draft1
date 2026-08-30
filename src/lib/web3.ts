@@ -1,3 +1,5 @@
+import { BrowserProvider, Contract, type Eip1193Provider } from 'ethers';
+
 export interface IpfsMetadata {
   timestamp: string;
   aiVisionScore: number;
@@ -22,6 +24,110 @@ export interface TxDetails {
   to: string;
   cid: string;
   network: string;
+}
+
+export const CONTRACT_ADDRESS = import.meta.env.VITE_CONTRACT_ADDRESS ?? '';
+export const CHAIN_ID = Number(import.meta.env.VITE_CHAIN_ID ?? 80002); // Polygon Amoy
+export const RPC_URL = import.meta.env.VITE_RPC_URL ?? 'https://rpc-amoy.polygon.technology';
+export const BLOCK_EXPLORER =
+  import.meta.env.VITE_BLOCK_EXPLORER ?? 'https://amoy.polygonscan.com/tx/';
+export const IPFS_GATEWAY = 'https://ipfs.io/ipfs/';
+
+export const IS_ONCHAIN_CONFIGURED = CONTRACT_ADDRESS.length > 0;
+
+const EVIDENCE_REGISTRY_ABI = [
+  'function lockEvidence(string projectId, string ipfsCid) external',
+  'function evidenceCount() external view returns (uint256)',
+  'event EvidenceLocked(uint256 indexed id, string projectId, string ipfsCid, address indexed reporter, uint256 timestamp)',
+];
+
+export class WrongNetworkError extends Error {
+  constructor(public expectedChainId: number, public actualChainId: number) {
+    super(`Wallet berada di chain ${actualChainId}, harap pindah ke chain ${expectedChainId}.`);
+    this.name = 'WrongNetworkError';
+  }
+}
+
+function getInjectedProvider(): Eip1193Provider {
+  if (!window.ethereum) {
+    throw new Error('MetaMask (atau wallet EVM lain) tidak terdeteksi di browser ini.');
+  }
+  return window.ethereum;
+}
+
+export async function connectRealWallet(): Promise<string> {
+  const provider = new BrowserProvider(getInjectedProvider());
+  const accounts = await provider.send('eth_requestAccounts', []);
+  const network = await provider.getNetwork();
+  if (Number(network.chainId) !== CHAIN_ID) {
+    await switchToConfiguredChain();
+  }
+  return accounts[0];
+}
+
+export async function switchToConfiguredChain(): Promise<void> {
+  const ethereum = getInjectedProvider();
+  const chainIdHex = `0x${CHAIN_ID.toString(16)}`;
+  try {
+    await ethereum.request({
+      method: 'wallet_switchEthereumChain',
+      params: [{ chainId: chainIdHex }],
+    });
+  } catch (err) {
+    const code = (err as { code?: number })?.code;
+    if (code === 4902) {
+      await ethereum.request({
+        method: 'wallet_addEthereumChain',
+        params: [
+          {
+            chainId: chainIdHex,
+            chainName: 'Polygon Amoy Testnet',
+            nativeCurrency: { name: 'POL', symbol: 'POL', decimals: 18 },
+            rpcUrls: [RPC_URL],
+            blockExplorerUrls: [BLOCK_EXPLORER.replace(/\/tx\/?$/, '')],
+          },
+        ],
+      });
+    } else {
+      throw err;
+    }
+  }
+}
+
+export async function lockEvidenceOnChain(
+  projectId: string,
+  cid: string,
+): Promise<TxDetails> {
+  if (!IS_ONCHAIN_CONFIGURED) {
+    throw new Error('VITE_CONTRACT_ADDRESS belum diisi — jalankan dalam mode simulasi.');
+  }
+
+  const provider = new BrowserProvider(getInjectedProvider());
+  const network = await provider.getNetwork();
+  if (Number(network.chainId) !== CHAIN_ID) {
+    throw new WrongNetworkError(CHAIN_ID, Number(network.chainId));
+  }
+
+  const signer = await provider.getSigner();
+  const contract = new Contract(CONTRACT_ADDRESS, EVIDENCE_REGISTRY_ABI, signer);
+
+  const tx = await contract.lockEvidence(projectId, cid);
+  const receipt = await tx.wait();
+
+  return {
+    txHash: receipt.hash,
+    blockNumber: receipt.blockNumber,
+    gasUsed: receipt.gasUsed.toString(),
+    gasPrice: receipt.gasPrice
+      ? `${(Number(receipt.gasPrice) / 1e9).toFixed(2)} Gwei`
+      : 'n/a',
+    contractAddress: CONTRACT_ADDRESS,
+    status: 'success',
+    from: await signer.getAddress(),
+    to: CONTRACT_ADDRESS,
+    cid,
+    network: 'Polygon Amoy Testnet',
+  };
 }
 
 const CID_CHARS = 'abcdefghijklmnopqrstuvwxyz234567';
@@ -88,7 +194,7 @@ export function simulateTx(cid: string, from: string): TxDetails {
     from,
     to: '0xK4W4LD4n4A1c0ntr4ct000000000000000000abcd',
     cid,
-    network: 'KawalDana Testnet (Chain ID: 8740)',
+    network: 'KawalDana Testnet (Simulasi)',
   };
 }
 
@@ -96,6 +202,3 @@ export function shortenHash(hash: string, prefix = 10, suffix = 8): string {
   if (hash.length <= prefix + suffix) return hash;
   return `${hash.slice(0, prefix)}…${hash.slice(-suffix)}`;
 }
-
-export const IPFS_GATEWAY = 'https://ipfs.io/ipfs/';
-export const BLOCK_EXPLORER = 'https://testnet.kawaldana.xyz/tx/';
