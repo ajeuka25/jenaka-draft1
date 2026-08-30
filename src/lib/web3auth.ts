@@ -1,61 +1,20 @@
-import type { Web3AuthNoModal } from '@web3auth/no-modal';
-import {
-  WEB3AUTH_CLIENT_ID,
-  IS_WEB3AUTH_CONFIGURED,
-  AMOY_CHAIN_ID_HEX,
-  AMOY_CHAIN_CONFIG,
-} from '@/web3authContext';
+import { CHAIN_ID, RPC_URL, BLOCK_EXPLORER } from '@/lib/web3';
 
-export { IS_WEB3AUTH_CONFIGURED };
+// File ini SENGAJA tidak meng-import apa pun dari '@web3auth/*' di top-level.
+// Kode @web3auth sesungguhnya baru di-import dinamis di src/lib/web3auth.ts,
+// hanya saat user klik connect.
 
-let instancePromise: Promise<Web3AuthNoModal> | null = null;
+export const WEB3AUTH_CLIENT_ID = import.meta.env.VITE_WEB3AUTH_CLIENT_ID ?? '';
+export const IS_WEB3AUTH_CONFIGURED = WEB3AUTH_CLIENT_ID.length > 0;
 
-async function getWeb3Auth(): Promise<Web3AuthNoModal> {
-  if (!instancePromise) {
-    instancePromise = (async () => {
-      const { Web3AuthNoModal, WEB3AUTH_NETWORK, authConnector } =
-        await import('@web3auth/no-modal');
+export const AMOY_CHAIN_ID_HEX = `0x${CHAIN_ID.toString(16)}`;
 
-      const web3auth = new Web3AuthNoModal({
-        clientId: WEB3AUTH_CLIENT_ID,
-        web3AuthNetwork: WEB3AUTH_NETWORK.SAPPHIRE_DEVNET,
-        chains: [{ chainNamespace: 'eip155', ...AMOY_CHAIN_CONFIG }],
-        defaultChainId: AMOY_CHAIN_ID_HEX,
-        connectors: [authConnector()],
-      });
-
-      await web3auth.init();
-      return web3auth;
-    })();
-  }
-  return instancePromise;
-}
-
-export async function connectWeb3Auth(method: 'social' | 'passkey'): Promise<string> {
-  if (!IS_WEB3AUTH_CONFIGURED) {
-    throw new Error('VITE_WEB3AUTH_CLIENT_ID belum diisi di .env');
-  }
-
-  const { WALLET_CONNECTORS, AUTH_CONNECTION } = await import('@web3auth/no-modal');
-  const web3auth = await getWeb3Auth();
-
-  await web3auth.connectTo(WALLET_CONNECTORS.AUTH, {
-    authConnection: method === 'passkey' ? AUTH_CONNECTION.PASSKEYS : AUTH_CONNECTION.GOOGLE,
-  });
-
-  const provider = web3auth.provider;
-  if (!provider) throw new Error('Web3Auth gagal menyediakan provider.');
-
-  const { BrowserProvider } = await import('ethers');
-  const ethersProvider = new BrowserProvider(provider);
-  const signer = await ethersProvider.getSigner();
-  return signer.getAddress();
-}
-
-export async function disconnectWeb3Auth(): Promise<void> {
-  if (!instancePromise) return;
-  const web3auth = await instancePromise;
-  if (web3auth.connected) {
-    await web3auth.logout();
-  }
-}
+export const AMOY_CHAIN_CONFIG = {
+  chainId: AMOY_CHAIN_ID_HEX,
+  rpcTarget: RPC_URL,
+  displayName: 'Polygon Amoy Testnet',
+  blockExplorerUrl: BLOCK_EXPLORER.replace(/\/tx\/?$/, ''),
+  ticker: 'POL',
+  tickerName: 'Polygon',
+  logo: 'https://cryptologos.cc/logos/polygon-matic-logo.png',
+};
