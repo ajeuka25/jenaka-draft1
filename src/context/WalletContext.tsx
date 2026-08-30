@@ -60,7 +60,9 @@ export function WalletProvider({ children }: { children: ReactNode }) {
   const disconnect = useCallback(() => {
     setState((s) => {
       if (s.connected && s.isReal && (s.method === 'social' || s.method === 'passkey')) {
-        disconnectWeb3Auth().catch(() => {});
+        disconnectWeb3Auth().catch(() => {
+          /* state lokal tetap direset walau disconnect remote gagal */
+        });
       }
       return { connected: false };
     });
@@ -129,7 +131,11 @@ export function WalletProvider({ children }: { children: ReactNode }) {
       } else {
         setState((s) =>
           s.connected && s.isReal && s.method === 'wallet'
-            ? { ...s, address: accounts[0], ens: `${accounts[0].slice(0, 6)}…${accounts[0].slice(-4)}` }
+            ? {
+                ...s,
+                address: accounts[0],
+                ens: `${accounts[0].slice(0, 6)}…${accounts[0].slice(-4)}`,
+              }
             : s,
         );
       }
