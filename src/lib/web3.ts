@@ -1,4 +1,4 @@
-import { BrowserProvider, Contract, type Eip1193Provider } from 'ethers';
+import { BrowserProvider, Contract, JsonRpcProvider, type Eip1193Provider } from 'ethers';
 
 export interface IpfsMetadata {
   timestamp: string;
@@ -63,6 +63,23 @@ export async function connectRealWallet(): Promise<string> {
     await switchToConfiguredChain();
   }
   return accounts[0];
+}
+
+/**
+ * Membaca saldo native token (POL) sungguhan dari RPC publik untuk address
+ * yang connect — menggantikan angka SIM_BALANCE yang dulu di-hardcode sama
+ * untuk semua orang. Dipakai untuk method 'wallet' maupun 'social'/'passkey'
+ * (Web3Auth), karena keduanya sama-sama punya address di chain yang sama.
+ */
+export async function getNativeBalance(address: string): Promise<number> {
+  try {
+    const provider = new JsonRpcProvider(RPC_URL);
+    const balanceWei = await provider.getBalance(address);
+    return Number(balanceWei) / 1e18;
+  } catch (err) {
+    console.warn('[web3] gagal membaca saldo on-chain:', err);
+    return 0;
+  }
 }
 
 export async function switchToConfiguredChain(): Promise<void> {
