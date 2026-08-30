@@ -4,11 +4,13 @@ import {
   useContext,
   useEffect,
   useMemo,
+  useRef,
   useState,
   type ReactNode,
 } from 'react';
-import { connectRealWallet } from '@/lib/web3';
+import { connectRealWallet, getNativeBalance } from '@/lib/web3';
 import { connectWeb3Auth, disconnectWeb3Auth, IS_WEB3AUTH_CONFIGURED } from '@/lib/web3auth';
+import { getOrCreateProfile, persistKawal, persistRewards } from '@/lib/profiles';
 
 type LoginMethod = 'wallet' | 'social' | 'passkey';
 
@@ -37,29 +39,29 @@ interface WalletContextValue {
 
 const WalletContext = createContext<WalletContextValue | null>(null);
 
-function randomAddress(): string {
-  const chars = '0123456789abcdef';
-  let addr = '0x';
-  for (let i = 0; i < 40; i++) addr += chars[Math.floor(Math.random() * 16)];
-  return addr;
-}
-
-const SIM_BALANCE = 4.21;
-const SIM_KAWAL = 1250;
 const METHOD_LABELS: Record<LoginMethod, string> = {
   wallet: 'MetaMask Wallet',
   social: 'Social / Email (Web3Auth)',
   passkey: 'Passkey (Account Abstraction)',
 };
 
+function ensFromAddress(address: string): string {
+  return `${address.slice(0, 6)}…${address.slice(-4)}`;
+}
+
 export function WalletProvider({ children }: { children: ReactNode }) {
   const [state, setState] = useState<WalletState>({ connected: false });
   const [connecting, setConnecting] = useState(false);
   const [rewards, setRewards] = useState(0);
+  const addressRef = useRef<string | null>(null);
+
+  useEffect(() => {
+    addressRef.current = state.connected ? state.address : null;
+  }, [state]);
 
   const disconnect = useCallback(() => {
     setState((s) => {
-      if (s.connected && s.isReal && (s.method === 'social' || s.method === 'passkey')) {
+      if (s.connected && (s.method === 'social' || s.method === 'passkey')) {
         disconnectWeb3Auth().catch(() => {
           /* state lokal tetap direset walau disconnect remote gagal */
         });
@@ -75,44 +77,43 @@ export function WalletProvider({ children }: { children: ReactNode }) {
       setConnecting(true);
 
       try {
-        if (method === 'wallet' && window.ethereum) {
-          const address = await connectRealWallet();
-          setState({
-            connected: true,
-            address,
-            ens: `${address.slice(0, 6)}…${address.slice(-4)}`,
-            balance: SIM_BALANCE,
-            kawal: SIM_KAWAL,
-            method,
-            methodLabel: METHOD_LABELS[method],
-            isReal: true,
-          });
-        } else if ((method === 'social' || method === 'passkey') && IS_WEB3AUTH_CONFIGURED) {
-          const address = await connectWeb3Auth(method);
-          setState({
-            connected: true,
-            address,
-            ens: `${address.slice(0, 6)}…${address.slice(-4)}`,
-            balance: SIM_BALANCE,
-            kawal: SIM_KAWAL,
-            method,
-            methodLabel: METHOD_LABELS[method],
-            isReal: true,
-          });
+        let address: string;
+
+        if (method === 'wallet') {
+          if (!window.ethereum) {
+            throw new Error(
+              'MetaMask (atau wallet EVM lain) tidak terdeteksi di browser ini. Install ekstensi MetaMask, atau pilih "Login with Social / Email" atau "Passkey" sebagai alternatif.',
+            );
+          }
+          address = await connectRealWallet();
         } else {
-          await new Promise((r) => setTimeout(r, 1400));
-          const address = randomAddress();
-          setState({
-            connected: true,
-            address,
-            ens: `${address.slice(0, 6)}…${address.slice(-4)}`,
-            balance: SIM_BALANCE,
-            kawal: SIM_KAWAL,
-            method,
-            methodLabel: METHOD_LABELS[method],
-            isReal: false,
-          });
+          if (!IS_WEB3AUTH_CONFIGURED) {
+            throw new Error(
+              'Login social/passkey belum dikonfigurasi: variabel VITE_WEB3AUTH_CLIENT_ID belum diisi di .env. Minta admin mengisi Client ID dari dashboard Web3Auth, atau connect memakai MetaMask.',
+            );
+          }
+          address = await connectWeb3Auth(method);
         }
+
+        // Setiap address yang connect punya profil sendiri di Supabase
+        // (kawal points, dsb) — bukan lagi angka simulasi yang sama untuk
+        // semua orang.
+        const [profile, balance] = await Promise.all([
+          getOrCreateProfile(address, method),
+          getNativeBalance(address),
+        ]);
+
+        setState({
+          connected: true,
+          address,
+          ens: ensFromAddress(address),
+          balance,
+          kawal: profile.kawal,
+          method,
+          methodLabel: METHOD_LABELS[method],
+          isReal: true,
+        });
+        setRewards(profile.rewards);
       } finally {
         setConnecting(false);
       }
@@ -130,11 +131,11 @@ export function WalletProvider({ children }: { children: ReactNode }) {
         disconnect();
       } else {
         setState((s) =>
-          s.connected && s.isReal && s.method === 'wallet'
+          s.connected && s.method === 'wallet'
             ? {
                 ...s,
                 address: accounts[0],
-                ens: `${accounts[0].slice(0, 6)}…${accounts[0].slice(-4)}`,
+                ens: ensFromAddress(accounts[0]),
               }
             : s,
         );
@@ -149,9 +150,22 @@ export function WalletProvider({ children }: { children: ReactNode }) {
     };
   }, [disconnect]);
 
-  const award = useCallback((amount: number) => setRewards((r) => r + amount), []);
+  const award = useCallback((amount: number) => {
+    setRewards((r) => {
+      const next = r + amount;
+      const address = addressRef.current;
+      if (address) persistRewards(address, next).catch(() => {});
+      return next;
+    });
+  }, []);
+
   const awardKawal = useCallback((amount: number) => {
-    setState((s) => (s.connected ? { ...s, kawal: s.kawal + amount } : s));
+    setState((s) => {
+      if (!s.connected) return s;
+      const nextKawal = s.kawal + amount;
+      persistKawal(s.address, nextKawal).catch(() => {});
+      return { ...s, kawal: nextKawal };
+    });
   }, []);
 
   const value = useMemo(
