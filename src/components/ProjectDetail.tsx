@@ -390,9 +390,13 @@ export function ProjectDetail({ project, onClose }: ProjectDetailProps) {
                     </p>
                   </div>
                   <button
-                    className="ml-auto flex shrink-0 items-center gap-1 text-xs font-medium text-neon transition hover:gap-2"
-                  >
-                    <ExternalLink size={13} /> Explorer
+                    href={`${BLOCK_EXPLORER}${txHash}`}
+  target="_blank"
+  rel="noopener noreferrer"
+  className="ml-auto flex shrink-0 items-center gap-1 text-xs font-medium text-neon transition hover:gap-2"
+>
+  <ExternalLink size={13} /> Explorer
+</a>
                   </button>
                 </div>
                 <button
@@ -418,6 +422,12 @@ export function ProjectDetail({ project, onClose }: ProjectDetailProps) {
                   : 'Lock Evidence On-Chain (Testnet)'}
               </button>
             )}
+      {lockError && (
+  <p className="mt-2 flex items-center gap-1.5 text-xs text-danger">
+    <AlertTriangle size={13} className="shrink-0" />
+    {lockError}
+  </p>
+)}
           </div>
         </div>
       )}
