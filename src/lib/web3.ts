@@ -1,5 +1,4 @@
-import { BrowserProvider, Contract, JsonRpcProvider, type Eip1193Provider } from 'ethers';
-import { detectWalletProvider } from '@/lib/walletDetect';
+import { BrowserProvider, Contract, type Eip1193Provider } from 'ethers';
 
 export interface IpfsMetadata {
   timestamp: string;
@@ -49,38 +48,25 @@ export class WrongNetworkError extends Error {
   }
 }
 
+function getInjectedProvider(): Eip1193Provider {
+  if (!window.ethereum) {
+    throw new Error('MetaMask (atau wallet EVM lain) tidak terdeteksi di browser ini.');
+  }
+  return window.ethereum;
+}
+
 export async function connectRealWallet(): Promise<string> {
-  const injectedProvider = await detectWalletProvider();
-  const provider = new BrowserProvider(injectedProvider);
+  const provider = new BrowserProvider(getInjectedProvider());
   const accounts = await provider.send('eth_requestAccounts', []);
   const network = await provider.getNetwork();
   if (Number(network.chainId) !== CHAIN_ID) {
-    await switchToConfiguredChain(injectedProvider);
+    await switchToConfiguredChain();
   }
   return accounts[0];
 }
 
-/**
- * Membaca saldo native token (POL) sungguhan dari RPC publik untuk address
- * yang connect — menggantikan angka SIM_BALANCE yang dulu di-hardcode sama
- * untuk semua orang. Dipakai untuk method 'wallet' maupun 'social'/'passkey'
- * (Web3Auth), karena keduanya sama-sama punya address di chain yang sama.
- */
-export async function getNativeBalance(address: string): Promise<number> {
-  try {
-    const provider = new JsonRpcProvider(RPC_URL);
-    const balanceWei = await provider.getBalance(address);
-    return Number(balanceWei) / 1e18;
-  } catch (err) {
-    console.warn('[web3] gagal membaca saldo on-chain:', err);
-    return 0;
-  }
-}
-
-export async function switchToConfiguredChain(
-  injectedProvider?: Eip1193Provider,
-): Promise<void> {
-  const ethereum = injectedProvider ?? (await detectWalletProvider());
+export async function switchToConfiguredChain(): Promise<void> {
+  const ethereum = getInjectedProvider();
   const chainIdHex = `0x${CHAIN_ID.toString(16)}`;
   try {
     await ethereum.request({
@@ -116,7 +102,7 @@ export async function lockEvidenceOnChain(
     throw new Error('VITE_CONTRACT_ADDRESS belum diisi — jalankan dalam mode simulasi.');
   }
 
-  const provider = new BrowserProvider(await detectWalletProvider());
+  const provider = new BrowserProvider(getInjectedProvider());
   const network = await provider.getNetwork();
   if (Number(network.chainId) !== CHAIN_ID) {
     throw new WrongNetworkError(CHAIN_ID, Number(network.chainId));
