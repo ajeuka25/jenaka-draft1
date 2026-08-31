@@ -14,7 +14,6 @@ import {
   Zap,
 } from 'lucide-react';
 import { useWallet } from '@/context/WalletContext';
-import { useToast } from '@/context/ToastContext';
 import { Modal } from '@/components/ui/Modal';
 
 type LoginMethod = 'wallet' | 'social' | 'passkey';
@@ -51,7 +50,6 @@ const LOGIN_OPTIONS: {
 
 export function WalletButton() {
   const { state, connecting, rewards, connect, disconnect } = useWallet();
-  const { push } = useToast();
   const [copied, setCopied] = useState(false);
   const [showLogin, setShowLogin] = useState(false);
   const [pendingMethod, setPendingMethod] = useState<LoginMethod | null>(null);
@@ -59,14 +57,8 @@ export function WalletButton() {
   const handleLogin = async (method: LoginMethod) => {
     setPendingMethod(method);
     setShowLogin(false);
-    try {
-      await connect(method);
-    } catch (err) {
-      const message = err instanceof Error ? err.message : 'Gagal connect. Coba lagi.';
-      push('warning', 'Gagal Connect', message);
-    } finally {
-      setPendingMethod(null);
-    }
+    await connect(method);
+    setPendingMethod(null);
   };
 
   if (state.connected) {

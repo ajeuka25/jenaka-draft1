@@ -12,11 +12,15 @@ interface PinataPinResponse {
 
 /**
  * Pin metadata evidence ke IPFS lewat Pinata dan kembalikan CID sungguhan.
- * Kalau VITE_PINATA_JWT belum diisi, otomatis fallback ke CID acak (mode simulasi).
+ * Kalau VITE_PINATA_JWT belum diisi, otomatis fallback ke CID acak
+ * (mode simulasi) supaya alur "Lock Evidence" tidak pernah gagal total
+ * hanya karena IPFS belum dikonfigurasi.
  *
  * CATATAN KEAMANAN: JWT Pinata di sini dipanggil langsung dari browser.
  * Untuk demo/testnet ini cukup asalkan JWT dibuat dengan scope terbatas
- * (hanya izin `pinJSONToIPFS`). Untuk production, pindahkan ke backend/Edge Function.
+ * (hanya izin `pinJSONToIPFS`, tanpa izin akun lain). Untuk production,
+ * pindahkan pemanggilan ini ke backend/Edge Function agar JWT tidak
+ * pernah terekspos ke klien.
  */
 export async function pinMetadataToIpfs(metadata: IpfsMetadata): Promise<string> {
   if (!IS_IPFS_CONFIGURED) {
