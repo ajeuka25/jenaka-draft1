@@ -492,3 +492,63 @@ INSERT INTO audit_logs (project_id, skor_risiko, deskripsi_anomali, phase, ai_mo
   ('PRJ-002', 95, 'Mark-up harga Semen Gresik: LPJ Rp160.000 vs pasar Rp65.000 per sak.', 'done', 'KawalDana-AI-v2'),
   ('PRJ-003', 12, 'Tidak ditemukan indikasi penyimpangan. Harga dalam rentang pasar.', 'done', 'KawalDana-AI-v2')
 ON CONFLICT DO NOTHING;
+
+/*
+# Create profiles table (per-account state for connected wallets)
+
+## Overview
+Previously, KAWAL points and reward points shown after "Connect Wallet"
+were hardcoded constants (SIM_KAWAL / SIM_BALANCE) applied to every
+session, and were never persisted — so every visitor saw the same
+numbers and lost them on refresh/disconnect, regardless of which real
+wallet/account they connected with.
+
+This migration adds a `profiles` table keyed by the connected wallet
+address (real MetaMask address, or the address derived from a Web3Auth
+social/passkey login) so each account genuinely has its own data that
+survives reconnects.
+
+## New Tables
+
+1. **profiles** — one row per connected wallet address.
+   - `wallet_address` (text PK, lowercased 0x… address)
+   - `login_method` (text: 'wallet' | 'social' | 'passkey')
+   - `kawal` (bigint, default 0) — KAWAL points balance for this account
+   - `rewards` (bigint, default 0) — session/task reward points (TKW)
+   - `created_at` (timestamptz)
+   - `last_login_at` (timestamptz)
+
+## Security
+Same single-tenant, no-auth-screen model as the rest of this schema:
+RLS is enabled with public (anon + authenticated) policies, matching
+the existing tables. There is no server-side auth session in this app,
+so access control for "which account is yours" is enforced by wallet
+signature (MetaMask / Web3Auth) at the client, not by RLS.
+*/
+
+CREATE TABLE IF NOT EXISTS profiles (
+  wallet_address text PRIMARY KEY,
+  login_method text NOT NULL DEFAULT 'wallet',
+  kawal bigint NOT NULL DEFAULT 0,
+  rewards bigint NOT NULL DEFAULT 0,
+  created_at timestamptz NOT NULL DEFAULT now(),
+  last_login_at timestamptz NOT NULL DEFAULT now()
+);
+
+ALTER TABLE profiles ENABLE ROW LEVEL SECURITY;
+
+DROP POLICY IF EXISTS "anon_select_profiles" ON profiles;
+CREATE POLICY "anon_select_profiles" ON profiles FOR SELECT
+  TO anon, authenticated USING (true);
+
+DROP POLICY IF EXISTS "anon_insert_profiles" ON profiles;
+CREATE POLICY "anon_insert_profiles" ON profiles FOR INSERT
+  TO anon, authenticated WITH CHECK (true);
+
+DROP POLICY IF EXISTS "anon_update_profiles" ON profiles;
+CREATE POLICY "anon_update_profiles" ON profiles FOR UPDATE
+  TO anon, authenticated USING (true) WITH CHECK (true);
+
+DROP POLICY IF EXISTS "anon_delete_profiles" ON profiles;
+CREATE POLICY "anon_delete_profiles" ON profiles FOR DELETE
+  TO anon, authenticated USING (true);
