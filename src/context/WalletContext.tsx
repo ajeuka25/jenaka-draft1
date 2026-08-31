@@ -8,7 +8,7 @@ import {
   useState,
   type ReactNode,
 } from 'react';
-import { connectRealWallet, getNativeBalance } from '@/lib/web3';
+import { connectRealWallet, getNativeBalance, CHAIN_ID } from '@/lib/web3';
 import { connectWeb3Auth, disconnectWeb3Auth, IS_WEB3AUTH_CONFIGURED } from '@/lib/web3auth';
 import { getOrCreateProfile, persistKawal, persistRewards } from '@/lib/profiles';
 
@@ -137,11 +137,33 @@ export function WalletProvider({ children }: { children: ReactNode }) {
       }
     };
 
+    const RELOAD_GUARD_KEY = 'jenaka:chain-reload-guard';
+
+    const handleChainChanged = (...args: unknown[]) => {
+      const newChainIdHex = args[0] as string;
+      const currentChainIdHex = `0x${CHAIN_ID.toString(16)}`;
+
+      // Sebagian wallet (terutama saat ada >1 extension aktif) memancarkan
+      // chainChanged begitu halaman dimuat walau chain-nya tidak benar-benar
+      // berubah. Reload tanpa syarat di sini dulu menyebabkan reload loop
+      // tak berhenti. Sekarang hanya reload kalau chain-nya SUNGGUH beda
+      // dari yang dikonfigurasi, dan dibatasi 1x per beberapa detik supaya
+      // tidak bisa jadi loop lagi walau event-nya dobel/aneh.
+      if (newChainIdHex?.toLowerCase() === currentChainIdHex.toLowerCase()) return;
+
+      const lastReload = Number(sessionStorage.getItem(RELOAD_GUARD_KEY) ?? '0');
+      if (Date.now() - lastReload < 5000) return;
+
+      sessionStorage.setItem(RELOAD_GUARD_KEY, String(Date.now()));
+      window.location.reload();
+    };
+
     ethereum.on('accountsChanged', handleAccountsChanged);
-    ethereum.on('chainChanged', () => window.location.reload());
+    ethereum.on('chainChanged', handleChainChanged);
 
     return () => {
       ethereum.removeListener?.('accountsChanged', handleAccountsChanged);
+      ethereum.removeListener?.('chainChanged', handleChainChanged);
     };
   }, [disconnect]);
 
