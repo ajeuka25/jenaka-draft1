@@ -83,3 +83,33 @@ body {
     );
   }
 }
+
+/* ---- Leaflet: marker risiko & tema gelap ---- */
+.risk-marker { background: transparent; border: 0; }
+.risk-marker__wrap { position: relative; width: 28px; height: 28px; }
+.risk-marker__dot {
+  position: absolute; inset: 0; display: grid; place-items: center;
+  border-radius: 9999px; border: 2px solid #fff;
+  color: #fff; font: 700 10px 'Inter', sans-serif; cursor: pointer;
+}
+.risk-marker__pulse {
+  position: absolute; inset: 0; border-radius: 9999px; opacity: 0.35;
+  animation: risk-pulse 2s ease-out infinite;
+}
+.risk-marker__label {
+  position: absolute; top: 32px; left: 50%; transform: translateX(-50%);
+  white-space: nowrap; font: 600 11px 'Inter', sans-serif; color: #e2e8f0;
+  text-shadow: 0 1px 3px #000, 0 0 3px #000;
+}
+@keyframes risk-pulse {
+  0% { transform: scale(1); opacity: 0.45; }
+  100% { transform: scale(2.4); opacity: 0; }
+}
+.leaflet-container { font-family: 'Inter', sans-serif; }
+.leaflet-tooltip { font-size: 12px; }
+
+/* Tailwind preflight memberi img { max-width:100%; height:auto } yang merusak tile Leaflet */
+.leaflet-container img,
+.leaflet-container svg { max-width: none !important; max-height: none !important; }
+.leaflet-container .leaflet-tile { width: 256px; height: 256px; }
+.leaflet-control-zoom a { color: #0f172a; }
