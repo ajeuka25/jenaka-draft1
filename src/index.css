@@ -113,3 +113,8 @@ body {
 .leaflet-container svg { max-width: none !important; max-height: none !important; }
 .leaflet-container .leaflet-tile { width: 256px; height: 256px; }
 .leaflet-control-zoom a { color: #0f172a; }
+
+/* Tampilan gelap untuk tile OSM standar (tanpa API key) */
+.osm-dark-tiles {
+  filter: invert(1) hue-rotate(180deg) brightness(0.9) contrast(0.9) saturate(0.6);
+}
