@@ -1,4 +1,17 @@
-import { useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
+import L from 'leaflet';
+import 'leaflet/dist/leaflet.css';
+import {
+  MapContainer,
+  TileLayer,
+  LayersControl,
+  Circle,
+  Marker,
+  Tooltip,
+  ScaleControl,
+  ZoomControl,
+  useMap,
+} from 'react-leaflet';
 import {
   Map as MapIcon,
   MapPin,
@@ -8,6 +21,8 @@ import {
   AlertOctagon,
   Users,
   Wallet,
+  Maximize2,
+  Crosshair,
 } from 'lucide-react';
 import {
   projects,
@@ -24,26 +39,62 @@ const RISK_STYLE = {
   aman: { fill: '#22C55E', glow: 'drop-shadow(0 0 4px #22C55E)', pulse: false },
 } as const;
 
-const MAP_W = 800;
-const MAP_H = 480;
+// Pusat awal peta: Pulau Jawa (fallback bila tidak ada proyek terfilter)
+const DEFAULT_CENTER: [number, number] = [-7.0, 107.5];
+const DEFAULT_ZOOM = 8;
 
-// Project geo coordinates → map pixel projection (Indonesia bbox approx)
-function projectToPx(lat: number, lng: number) {
-  const minLat = -8.5,
-    maxLat = -6.5,
-    minLng = 106,
-    maxLng = 109;
-  const x = ((lng - minLng) / (maxLng - minLng)) * (MAP_W - 80) + 40;
-  const y = ((maxLat - lat) / (maxLat - minLat)) * (MAP_H - 80) + 40;
-  return { x, y };
+// Marker berbentuk lencana bulat berisi skor risiko (HTML divIcon)
+function buildIcon(fill: string, score: number, pulse: boolean, id: string) {
+  return L.divIcon({
+    className: 'risk-marker',
+    iconSize: [28, 28],
+    iconAnchor: [14, 14],
+    html: `
+      <div class="risk-marker__wrap">
+        ${pulse ? `<span class="risk-marker__pulse" style="background:${fill}"></span>` : ''}
+        <span class="risk-marker__dot" style="background:${fill};box-shadow:0 0 10px ${fill}">${score}</span>
+        <span class="risk-marker__label">${id}</span>
+      </div>`,
+  });
+}
+
+// Zoom otomatis agar semua marker yang terfilter terlihat
+function FitBounds({ points, resetKey }: { points: [number, number][]; resetKey: number }) {
+  const map = useMap();
+  useEffect(() => {
+    if (points.length === 0) return;
+    if (points.length === 1) {
+      map.setView(points[0], 11);
+      return;
+    }
+    map.fitBounds(L.latLngBounds(points), { padding: [60, 60], maxZoom: 11 });
+  }, [map, points, resetKey]);
+  return null;
+}
+
+// Terbang (zoom in) ke proyek yang dipilih dari daftar samping
+function FlyToProject({ target }: { target: { lat: number; lng: number; n: number } | null }) {
+  const map = useMap();
+  useEffect(() => {
+    if (!target) return;
+    map.flyTo([target.lat, target.lng], 14, { duration: 1.2 });
+  }, [map, target]);
+  return null;
 }
 
 export function MapView() {
   const [selected, setSelected] = useState<Project | null>(null);
+  const [flyTarget, setFlyTarget] = useState<{ lat: number; lng: number; n: number } | null>(null);
+  const [resetKey, setResetKey] = useState(0);
   const [filter, setFilter] = useState<'all' | 'bahaya' | 'waspada' | 'aman'>('all');
 
   const filtered = projects.filter(
     (p) => filter === 'all' || getRiskLevel(p.skorRisiko) === filter,
+  );
+
+  const points = useMemo<[number, number][]>(
+    () => filtered.map((p) => [p.koordinat.lat, p.koordinat.lng]),
+    [filtered],
   );
 
   const counts = {
@@ -63,7 +114,7 @@ export function MapView() {
         </h2>
         <p className="text-sm text-slate-400">
           Visualisasi geografis titik-titik proyek berdasarkan AI Risk Score.
-          Klik marker untuk detail proyek.
+          Klik marker untuk detail proyek. Zoom dengan tombol +/−, scroll mouse, dobel-klik, atau cubit di layar sentuh.
         </p>
       </div>
 
@@ -100,96 +151,107 @@ export function MapView() {
 
       <div className="grid gap-4 lg:grid-cols-[1fr_320px]">
         {/* Map */}
-        <div className="relative overflow-hidden rounded-2xl border border-white/10 bg-ink-800/60">
-          <svg
-            viewBox={`0 0 ${MAP_W} ${MAP_H}`}
-            className="h-auto w-full"
-            style={{ minHeight: 360 }}
+        <div className="relative isolate z-0 overflow-hidden rounded-2xl border border-white/10 bg-ink-800/60">
+          <MapContainer
+            center={DEFAULT_CENTER}
+            zoom={DEFAULT_ZOOM}
+            minZoom={3}
+            maxZoom={19}
+            zoomControl={false}
+            scrollWheelZoom
+            doubleClickZoom
+            touchZoom
+            boxZoom
+            keyboard
+            zoomSnap={0.5}
+            zoomDelta={1}
+            wheelPxPerZoomLevel={90}
+            worldCopyJump
+            className="h-[480px] w-full sm:h-[560px]"
+            style={{ background: '#0b1120' }}
           >
-            {/* Grid background */}
-            <defs>
-              <pattern id="grid" width="40" height="40" patternUnits="userSpaceOnUse">
-                <path d="M 40 0 L 0 0 0 40" fill="none" stroke="rgba(255,255,255,0.04)" strokeWidth="1" />
-              </pattern>
-              <radialGradient id="bgGlow" cx="50%" cy="40%">
-                <stop offset="0%" stopColor="rgba(6,182,212,0.08)" />
-                <stop offset="100%" stopColor="transparent" />
-              </radialGradient>
-            </defs>
-            <rect width={MAP_W} height={MAP_H} fill="url(#bgGlow)" />
-            <rect width={MAP_W} height={MAP_H} fill="url(#grid)" />
+            <LayersControl position="topright">
+              <LayersControl.BaseLayer checked name="Gelap (OSM/CARTO)">
+                <TileLayer
+                  attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors &copy; <a href="https://carto.com/attributions">CARTO</a>'
+                  url="https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png"
+                  subdomains="abcd"
+                  maxZoom={19}
+                />
+              </LayersControl.BaseLayer>
+              <LayersControl.BaseLayer name="OpenStreetMap Standar">
+                <TileLayer
+                  attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
+                  url="https://tile.openstreetmap.org/{z}/{x}/{y}.png"
+                  maxZoom={19}
+                />
+              </LayersControl.BaseLayer>
+              <LayersControl.BaseLayer name="OpenTopoMap (Topografi)">
+                <TileLayer
+                  attribution='Map data: &copy; OpenStreetMap contributors, SRTM | Style: &copy; <a href="https://opentopomap.org">OpenTopoMap</a> (CC-BY-SA)'
+                  url="https://{s}.tile.opentopomap.org/{z}/{x}/{y}.png"
+                  subdomains="abc"
+                  maxZoom={17}
+                />
+              </LayersControl.BaseLayer>
+            </LayersControl>
+            <ZoomControl position="topleft" zoomInTitle="Perbesar (zoom in)" zoomOutTitle="Perkecil (zoom out)" />
+            <ScaleControl position="bottomright" imperial={false} />
+            <FitBounds points={points} resetKey={resetKey} />
+            <FlyToProject target={flyTarget} />
 
-            {/* Decorative landmass shapes */}
-            <g opacity="0.15" fill="#22C55E">
-              <path d="M120,180 Q200,140 320,160 Q380,200 340,280 Q250,300 180,260 Z" />
-              <path d="M420,200 Q520,180 600,220 Q640,280 560,310 Q480,300 440,260 Z" />
-            </g>
-
-            {/* Heatmap circles */}
+            {/* Heat halo — radius dalam meter, ikut skala peta */}
             {filtered.map((p) => {
-              const { x, y } = projectToPx(p.koordinat.lat, p.koordinat.lng);
-              const level = getRiskLevel(p.skorRisiko);
-              const style = RISK_STYLE[level];
+              const style = RISK_STYLE[getRiskLevel(p.skorRisiko)];
               return (
-                <circle
+                <Circle
                   key={`heat-${p.id}`}
-                  cx={x}
-                  cy={y}
-                  r={60}
-                  fill={style.fill}
-                  opacity={0.08}
+                  center={[p.koordinat.lat, p.koordinat.lng]}
+                  radius={5000 + p.skorRisiko * 100}
+                  pathOptions={{
+                    color: style.fill,
+                    weight: 1,
+                    opacity: 0.4,
+                    fillColor: style.fill,
+                    fillOpacity: 0.15,
+                  }}
                 />
               );
             })}
 
             {/* Markers */}
             {filtered.map((p) => {
-              const { x, y } = projectToPx(p.koordinat.lat, p.koordinat.lng);
               const level = getRiskLevel(p.skorRisiko);
               const style = RISK_STYLE[level];
               return (
-                <g
+                <Marker
                   key={p.id}
-                  transform={`translate(${x},${y})`}
-                  className="cursor-pointer"
-                  onClick={() => setSelected(p)}
+                  position={[p.koordinat.lat, p.koordinat.lng]}
+                  icon={buildIcon(style.fill, p.skorRisiko, style.pulse, p.id)}
+                  eventHandlers={{ click: () => setSelected(p) }}
                 >
-                  {style.pulse && (
-                    <circle r="18" fill={style.fill} opacity="0.2">
-                      <animate attributeName="r" values="14;26;14" dur="2s" repeatCount="indefinite" />
-                      <animate attributeName="opacity" values="0.25;0;0.25" dur="2s" repeatCount="indefinite" />
-                    </circle>
-                  )}
-                  <circle
-                    r="14"
-                    fill={style.fill}
-                    stroke="white"
-                    strokeWidth="2"
-                    style={{ filter: style.glow }}
-                  />
-                  <text
-                    y="5"
-                    textAnchor="middle"
-                    className="fill-white font-bold"
-                    style={{ fontSize: 10 }}
-                  >
-                    {p.skorRisiko}
-                  </text>
-                  <text
-                    y="32"
-                    textAnchor="middle"
-                    className="fill-slate-300"
-                    style={{ fontSize: 11 }}
-                  >
-                    {p.id}
-                  </text>
-                </g>
+                  <Tooltip direction="top" offset={[0, -16]}>
+                    <strong>{p.namaProyek}</strong>
+                    <br />
+                    {p.lokasi}
+                  </Tooltip>
+                </Marker>
               );
             })}
-          </svg>
+          </MapContainer>
+
+          {/* Tombol bantu: lihat semua titik */}
+          <button
+            type="button"
+            onClick={() => setResetKey((k) => k + 1)}
+            title="Tampilkan semua titik proyek"
+            className="absolute left-[10px] top-[86px] z-[1000] grid h-[30px] w-[30px] place-items-center rounded bg-white text-slate-700 shadow ring-1 ring-black/20 hover:bg-slate-100"
+          >
+            <Maximize2 size={15} />
+          </button>
 
           {/* Legend overlay */}
-          <div className="absolute bottom-3 left-3 rounded-xl bg-ink-900/80 px-4 py-3 ring-1 ring-white/10 backdrop-blur">
+          <div className="absolute bottom-8 left-3 z-[1000] rounded-xl bg-ink-900/80 px-4 py-3 ring-1 ring-white/10 backdrop-blur">
             <p className="mb-2 text-[10px] font-bold uppercase tracking-wider text-slate-400">
               Risk Level
             </p>
@@ -212,10 +274,10 @@ export function MapView() {
             const Icon =
               level === 'aman' ? ShieldCheck : level === 'waspada' ? AlertTriangle : AlertOctagon;
             return (
+              <div key={p.id} className="flex items-stretch gap-2">
               <button
-                key={p.id}
                 onClick={() => setSelected(p)}
-                className="group flex w-full items-center gap-3 rounded-xl border border-white/10 bg-white/5 p-3 text-left transition hover:border-neon/30 hover:bg-white/10"
+                className="group flex min-w-0 flex-1 items-center gap-3 rounded-xl border border-white/10 bg-white/5 p-3 text-left transition hover:border-neon/30 hover:bg-white/10"
               >
                 <span className={`grid h-10 w-10 shrink-0 place-items-center rounded-lg ${meta.badge}`}>
                   <Icon size={18} />
@@ -228,6 +290,15 @@ export function MapView() {
                   {p.skorRisiko}
                 </span>
               </button>
+              <button
+                type="button"
+                onClick={() => setFlyTarget({ ...p.koordinat, n: Date.now() })}
+                title="Zoom ke lokasi di peta"
+                className="grid h-10 w-10 shrink-0 place-items-center rounded-lg bg-white/5 text-slate-400 ring-1 ring-white/10 transition hover:text-neon"
+              >
+                <Crosshair size={16} />
+              </button>
+              </div>
             );
           })}
         </div>
