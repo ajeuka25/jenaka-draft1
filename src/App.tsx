@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { lazy, Suspense, useState } from 'react';
 import { WalletProvider } from '@/context/WalletContext';
 import { ToastProvider } from '@/context/ToastContext';
 import { Header } from '@/components/Header';
@@ -8,11 +8,14 @@ import { DashboardView } from '@/components/views/DashboardView';
 import { AuditView } from '@/components/views/AuditView';
 import { ReportsView } from '@/components/views/ReportsView';
 import { MbgView } from '@/components/views/MbgView';
-import { MapView } from '@/components/views/MapView';
 import { DaoView } from '@/components/views/DaoView';
 import { ProjectDetail } from '@/components/ProjectDetail';
 import type { Project } from '@/data/projects';
 import type { ViewKey } from '@/lib/nav';
+
+const MapView = lazy(() =>
+  import('@/components/views/MapView').then((m) => ({ default: m.MapView })),
+);
 
 function App() {
   const [view, setView] = useState<ViewKey>('dashboard');
@@ -42,7 +45,11 @@ function App() {
             )}
             {view === 'audit' && <AuditView onOpenProject={setActiveProject} />}
             {view === 'mbg' && <MbgView />}
-            {view === 'map' && <MapView />}
+            {view === 'map' && (
+              <Suspense fallback={<div className="mx-auto max-w-7xl px-4 py-20 text-center text-slate-400">Memuat peta…</div>}>
+                <MapView />
+              </Suspense>
+            )}
             {view === 'reports' && <ReportsView />}
             {view === 'dao' && <DaoView />}
           </main>
