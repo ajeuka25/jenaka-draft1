@@ -171,11 +171,11 @@ export function MapView() {
             style={{ background: '#0b1120' }}
           >
             <LayersControl position="topright">
-              <LayersControl.BaseLayer checked name="Gelap (OSM/CARTO)">
+              <LayersControl.BaseLayer checked name="OpenStreetMap Gelap">
                 <TileLayer
-                  attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors &copy; <a href="https://carto.com/attributions">CARTO</a>'
-                  url="https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png"
-                  subdomains="abcd"
+                  attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
+                  url="https://tile.openstreetmap.org/{z}/{x}/{y}.png"
+                  className="osm-dark-tiles"
                   maxZoom={19}
                 />
               </LayersControl.BaseLayer>
