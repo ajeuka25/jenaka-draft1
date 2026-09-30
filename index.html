@@ -19,6 +19,12 @@
     <meta property="og:image" content="https://bolt.new/static/og_default.png">
     <meta name="twitter:card" content="summary_large_image">
     <meta name="twitter:image" content="https://bolt.new/static/og_default.png">
+    <script>
+      // Shim untuk library Web3 (Web3Auth dll) yang mengacu ke global Node.js
+      // di browser. Tanpa ini muncul error "process is not defined".
+      window.global = window.global || window;
+      window.process = window.process || { env: {}, browser: true, version: '', versions: {}, nextTick: function (fn) { var a = Array.prototype.slice.call(arguments, 1); Promise.resolve().then(function () { fn.apply(null, a); }); } };
+    </script>
 </head>
   <body>
     <div id="root"></div>
