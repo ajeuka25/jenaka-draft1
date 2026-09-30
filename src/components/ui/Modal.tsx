@@ -36,15 +36,15 @@ export function Modal({
   if (!open) return null;
 
   return (
-    <div className="fixed inset-0 z-50 flex items-end justify-center p-0 sm:items-center sm:p-4">
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
       <div
         className="absolute inset-0 bg-black/70 backdrop-blur-sm animate-fade-in"
         onClick={onClose}
       />
       <div
-        className={`relative w-full ${maxWidth} max-h-[92vh] overflow-y-auto rounded-t-3xl sm:rounded-3xl glass-strong shadow-2xl animate-fade-in-up`}
+        className={`relative flex w-full ${maxWidth} max-h-[85vh] flex-col overflow-hidden rounded-3xl glass-strong shadow-2xl animate-fade-in-up`}
       >
-        <div className="sticky top-0 z-10 flex items-start justify-between gap-4 border-b border-white/10 bg-ink-900/80 px-5 py-4 backdrop-blur sm:px-6">
+        <div className="flex shrink-0 items-start justify-between gap-4 border-b border-white/10 bg-ink-900/80 px-5 py-4 backdrop-blur sm:px-6">
           <div className="flex items-start gap-3">
             {icon}
             <div>
@@ -64,7 +64,7 @@ export function Modal({
             <X size={20} />
           </button>
         </div>
-        <div className="px-5 py-5 sm:px-6">{children}</div>
+        <div className="min-h-0 flex-1 overflow-y-auto px-5 py-5 sm:px-6">{children}</div>
       </div>
     </div>
   );
