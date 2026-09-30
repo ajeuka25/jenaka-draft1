@@ -1,4 +1,5 @@
 import { useEffect, type ReactNode } from 'react';
+import { createPortal } from 'react-dom';
 import { X } from 'lucide-react';
 
 interface ModalProps {
@@ -35,7 +36,15 @@ export function Modal({
 
   if (!open) return null;
 
-  return (
+  // Dirender lewat portal ke document.body, BUKAN di posisi aslinya di
+  // pohon komponen. Ini penting: Header pakai `backdrop-blur-xl`, dan di
+  // banyak browser elemen dengan backdrop-filter membuat containing block
+  // baru untuk anak `position: fixed`-nya. Kalau Modal dirender inline di
+  // dalam Header (lewat WalletButton), `fixed inset-0` miliknya jadi
+  // terikat ke kotak Header (~64px) alih-alih layar penuh — itulah
+  // penyebab modal terlihat "tenggelam"/terjepit ke atas. Portal
+  // menghilangkan masalah ini sepenuhnya.
+  return createPortal(
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
       <div
         className="absolute inset-0 bg-black/70 backdrop-blur-sm animate-fade-in"
@@ -66,6 +75,7 @@ export function Modal({
         </div>
         <div className="min-h-0 flex-1 overflow-y-auto px-5 py-5 sm:px-6">{children}</div>
       </div>
-    </div>
+    </div>,
+    document.body,
   );
 }
