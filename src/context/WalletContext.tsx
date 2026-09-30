@@ -9,6 +9,7 @@ import {
   type ReactNode,
 } from 'react';
 import { connectRealWallet, getNativeBalance, CHAIN_ID } from '@/lib/web3';
+import { withTimeout } from '@/lib/withTimeout';
 import { connectWeb3Auth, disconnectWeb3Auth, IS_WEB3AUTH_CONFIGURED } from '@/lib/web3auth';
 import { getOrCreateProfile, persistKawal, persistRewards } from '@/lib/profiles';
 
@@ -90,27 +91,43 @@ export function WalletProvider({ children }: { children: ReactNode }) {
           address = await connectWeb3Auth(method);
         }
 
-        // Setiap address yang connect punya profil sendiri di Supabase
-        // (kawal points, dsb) — bukan lagi angka simulasi yang sama untuk
-        // semua orang.
-        const [profile, balance] = await Promise.all([
-          getOrCreateProfile(address, method),
-          getNativeBalance(address),
-        ]);
-
+        // Wallet dianggap TERSAMBUNG begitu dapat address asli — jangan
+        // sampai UI menggantung hanya karena ambil saldo/profil lambat.
         setState({
           connected: true,
           address,
           ens: ensFromAddress(address),
-          balance,
-          kawal: profile.kawal,
+          balance: 0,
+          kawal: 0,
           method,
           methodLabel: METHOD_LABELS[method],
           isReal: true,
         });
-        setRewards(profile.rewards);
-      } finally {
         setConnecting(false);
+
+        // Saldo on-chain & profil (KAWAL/rewards per akun) diisi belakangan.
+        // Dibatasi timeout supaya kalau RPC publik atau Supabase lambat/tidak
+        // terjangkau (umum terjadi di sandbox), tidak menggantung selamanya —
+        // fallback ke 0 dan tetap tampilkan wallet sebagai connected.
+        const [profile, balance] = await Promise.all([
+          withTimeout(
+            getOrCreateProfile(address, method),
+            8000,
+            { walletAddress: address.toLowerCase(), loginMethod: method, kawal: 0, rewards: 0 },
+            () => console.warn('[wallet] getOrCreateProfile timeout, pakai fallback 0'),
+          ),
+          withTimeout(getNativeBalance(address), 8000, 0, () =>
+            console.warn('[wallet] getNativeBalance timeout, pakai fallback 0'),
+          ),
+        ]);
+
+        setState((s) =>
+          s.connected && s.address === address ? { ...s, balance, kawal: profile.kawal } : s,
+        );
+        setRewards(profile.rewards);
+      } catch (err) {
+        setConnecting(false);
+        throw err;
       }
     },
     [state.connected, connecting],
