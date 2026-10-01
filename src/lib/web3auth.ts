@@ -10,9 +10,21 @@ export { IS_WEB3AUTH_CONFIGURED };
 
 let instancePromise: Promise<Web3AuthNoModal> | null = null;
 
+// SDK Web3Auth mengacu ke global Node.js (Buffer). Dipasang di sini, tepat
+// sebelum SDK di-import, supaya tidak bergantung pada urutan eksekusi
+// main.tsx atau cache browser.
+async function ensureNodeGlobals(): Promise<void> {
+  const g = globalThis as { Buffer?: unknown };
+  if (!g.Buffer) {
+    const { Buffer } = await import('buffer');
+    g.Buffer = Buffer;
+  }
+}
+
 async function getWeb3Auth(): Promise<Web3AuthNoModal> {
   if (!instancePromise) {
     instancePromise = (async () => {
+      await ensureNodeGlobals();
       const { Web3AuthNoModal } = await import('@web3auth/no-modal');
       const { WEB3AUTH_NETWORK } = await import('@web3auth/auth');
       const { AuthAdapter } = await import('@web3auth/auth-adapter');
@@ -47,6 +59,7 @@ export async function connectWeb3Auth(method: 'social' | 'passkey'): Promise<str
     throw new Error('VITE_WEB3AUTH_CLIENT_ID belum diisi di .env');
   }
 
+  await ensureNodeGlobals();
   const { WALLET_ADAPTERS } = await import('@web3auth/base');
   const { LOGIN_PROVIDER } = await import('@web3auth/auth');
   const web3auth = await getWeb3Auth();
