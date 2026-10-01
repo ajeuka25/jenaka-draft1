@@ -21,6 +21,7 @@ export default defineConfig({
     // module". Dengan include, semuanya di-prebundle sejak server start.
     include: [
       'ethers',
+      'buffer',
       '@web3auth/no-modal',
       '@web3auth/base',
       '@web3auth/auth',
