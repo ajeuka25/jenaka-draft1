@@ -52,7 +52,22 @@ export class WrongNetworkError extends Error {
 export async function connectRealWallet(): Promise<string> {
   const injectedProvider = await detectWalletProvider();
   const provider = new BrowserProvider(injectedProvider);
-  const accounts = await provider.send('eth_requestAccounts', []);
+  let accounts: string[];
+  try {
+    accounts = await provider.send('eth_requestAccounts', []);
+  } catch (err) {
+    const e = err as { code?: number | string; info?: { error?: { code?: number } } };
+    const code = e.info?.error?.code ?? e.code;
+    if (code === -32002) {
+      throw new Error(
+        'Ada permintaan koneksi yang masih menunggu di MetaMask. Klik ikon MetaMask di toolbar browser, lalu setujui atau tolak permintaannya, kemudian coba lagi.',
+      );
+    }
+    if (code === 4001 || code === 'ACTION_REJECTED') {
+      throw new Error('Koneksi dibatalkan: kamu menolak permintaan di MetaMask.');
+    }
+    throw err;
+  }
   const network = await provider.getNetwork();
   if (Number(network.chainId) !== CHAIN_ID) {
     await switchToConfiguredChain(injectedProvider);
