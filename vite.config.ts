@@ -26,6 +26,8 @@ export default defineConfig({
       '@web3auth/base',
       '@web3auth/auth',
       '@web3auth/auth-adapter',
+      '@web3auth/ethereum-provider',
+      '@web3auth/ethereum-provider',
     ],
     esbuildOptions: {
       define: { global: 'globalThis' },
