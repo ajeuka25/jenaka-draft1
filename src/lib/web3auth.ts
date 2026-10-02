@@ -29,13 +29,26 @@ async function getWeb3Auth(): Promise<Web3AuthNoModal> {
       const { WEB3AUTH_NETWORK } = await import('@web3auth/auth');
       const { AuthAdapter } = await import('@web3auth/auth-adapter');
 
+      const { EthereumPrivateKeyProvider } = await import('@web3auth/ethereum-provider');
+
+      const chainConfig = {
+        chainNamespace: 'eip155' as const,
+        ...AMOY_CHAIN_CONFIG,
+      };
+
+      // Web3Auth v9 WAJIB diberi privateKeyProvider. Tanpa ini adapter
+      // memanggil privateKeyProvider.setKeyExportFlag pada undefined dan
+      // muncul error "Cannot read properties of undefined (reading
+      // 'setKeyExportFlag')".
+      const privateKeyProvider = new EthereumPrivateKeyProvider({
+        config: { chainConfig },
+      });
+
       const web3auth = new Web3AuthNoModal({
         clientId: WEB3AUTH_CLIENT_ID,
         web3AuthNetwork: WEB3AUTH_NETWORK.SAPPHIRE_DEVNET,
-        chainConfig: {
-          chainNamespace: 'eip155',
-          ...AMOY_CHAIN_CONFIG,
-        },
+        chainConfig,
+        privateKeyProvider,
       });
 
       web3auth.configureAdapter(new AuthAdapter({
