@@ -103,8 +103,10 @@ export async function switchToConfiguredChain(
       params: [{ chainId: chainIdHex }],
     });
   } catch (err) {
-    const code = (err as { code?: number })?.code;
-    if (code === 4902) {
+    const e = err as { code?: number; message?: string; data?: { originalError?: { code?: number } } };
+    const code = e?.code ?? e?.data?.originalError?.code;
+    const unknownChain = code === 4902 || /unrecognized chain|not been added/i.test(e?.message ?? '');
+    if (unknownChain) {
       await ethereum.request({
         method: 'wallet_addEthereumChain',
         params: [
@@ -112,7 +114,14 @@ export async function switchToConfiguredChain(
             chainId: chainIdHex,
             chainName: 'Polygon Amoy Testnet',
             nativeCurrency: { name: 'POL', symbol: 'POL', decimals: 18 },
-            rpcUrls: [RPC_URL],
+            // RPC pertama dipakai MetaMask untuk validasi; sisanya cadangan.
+            rpcUrls: Array.from(
+              new Set([
+                RPC_URL,
+                'https://rpc-amoy.polygon.technology',
+                'https://polygon-amoy-bor-rpc.publicnode.com',
+              ]),
+            ),
             blockExplorerUrls: [BLOCK_EXPLORER.replace(/\/tx\/?$/, '')],
           },
         ],
